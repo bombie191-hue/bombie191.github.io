@@ -1,0 +1,479 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>ผังเครือข่ายแก๊งลักรถจักรยานยนต์ - ภ.จว.ตาก</title>
+
+  <!-- Tailwind (CDN) -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;600;700&display=swap" rel="stylesheet">
+
+  <!-- Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+
+  <!-- html2pdf (Export PDF) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+
+  <style>
+    body { font-family: 'Sarabun', sans-serif; background:#e5e7eb; -webkit-print-color-adjust: exact; }
+
+    /* A4 Landscape */
+    .page-container{
+      width:297mm; min-height:210mm; margin:18px auto; background:#fff;
+      box-shadow:0 0 16px rgba(0,0,0,.12); position:relative; overflow:hidden;
+    }
+
+    .editable{
+      border-bottom:1px dashed #cbd5e1; cursor:text; padding:0 2px; min-width:20px;
+      display:inline-block; transition:.2s;
+    }
+    .editable:hover{ background:#fffbeb; border-bottom:1px dashed #d97706; }
+    .editable:focus{ outline:none; background:#fff; border-bottom:2px solid #b91c1c; }
+
+    .img-upload-box{ cursor:pointer; transition:.2s; overflow:hidden; background-size:cover; background-position:center; }
+    .img-upload-box:hover{ opacity:.9; border:2px dashed #b91c1c; }
+
+    #toast{
+      visibility:hidden; min-width:280px; margin-left:-140px; background:#111827; color:#fff;
+      text-align:center; border-radius:10px; padding:14px 16px; position:fixed; z-index:3000;
+      left:50%; bottom:30px; font-size:14px; opacity:0; transition:.45s;
+    }
+    #toast.show{ visibility:visible; opacity:1; bottom:52px; }
+
+    @media print{
+      body{ background:#fff; }
+      .page-container{ margin:0; width:100%; height:100%; box-shadow:none; }
+      .no-print{ display:none !important; }
+      .editable{ border-bottom:none !important; }
+    }
+  </style>
+</head>
+
+<body class="p-4">
+
+  <!-- Controls -->
+  <div class="max-w-screen-xl mx-auto mb-3 flex flex-wrap justify-between items-center gap-2 no-print">
+    <div class="text-gray-700 text-sm">
+      <i class="fas fa-desktop text-green-700"></i>
+      <b>โหมดออฟไลน์:</b> บันทึก/โหลดข้อมูลลงคอมได้ (ไม่ใช้คลาวด์)
+    </div>
+    <div class="flex flex-wrap gap-2">
+      <button onclick="setThaiToday()"
+        class="bg-slate-700 hover:bg-slate-800 text-white font-bold py-2 px-4 rounded shadow flex items-center gap-2">
+        <i class="fas fa-calendar-check"></i> ใส่วันที่วันนี้
+      </button>
+
+      <button onclick="exportJSON()"
+        class="bg-emerald-700 hover:bg-emerald-800 text-white font-bold py-2 px-4 rounded shadow flex items-center gap-2">
+        <i class="fas fa-file-arrow-down"></i> บันทึกลงคอม (.json)
+      </button>
+
+      <label class="bg-amber-600 hover:bg-amber-700 text-white font-bold py-2 px-4 rounded shadow flex items-center gap-2 cursor-pointer">
+        <i class="fas fa-file-arrow-up"></i> โหลดไฟล์ (.json)
+        <input type="file" accept="application/json" class="hidden" onchange="importJSON(this)">
+      </label>
+
+      <button onclick="exportPDF()"
+        class="bg-indigo-800 hover:bg-indigo-900 text-white font-bold py-2 px-4 rounded shadow flex items-center gap-2">
+        <i class="fas fa-file-pdf"></i> Export PDF
+      </button>
+
+      <button onclick="window.print()"
+        class="bg-blue-900 hover:bg-blue-800 text-white font-bold py-2 px-4 rounded shadow flex items-center gap-2">
+        <i class="fas fa-print"></i> พิมพ์
+      </button>
+    </div>
+  </div>
+
+  <!-- Toast -->
+  <div id="toast"></div>
+
+  <!-- Main Canvas -->
+  <div class="page-container p-6 flex flex-col justify-between" id="canvas">
+
+    <!-- Header -->
+    <div class="flex justify-between items-start border-b-4 border-red-800 pb-2 mb-4">
+      <div class="flex items-center gap-4">
+        <!-- Logo -->
+        <div class="w-24 h-24 bg-white rounded-full flex items-center justify-center border-4 border-double border-gray-300 img-upload-box relative shadow-sm"
+             onclick="triggerUpload(this)" title="คลิกเพื่ออัปโหลดตราหน่วยงาน">
+          <input type="file" accept="image/*" class="hidden" onchange="previewImage(this)">
+          <div class="flex flex-col items-center pointer-events-none">
+            <i class="fas fa-shield-halved text-gray-300 text-4xl mb-1"></i>
+            <span class="text-[10px] text-center text-gray-400 font-bold leading-tight">คลิกใส่<br>โล่หน่วยงาน</span>
+          </div>
+        </div>
+
+        <div class="mt-2">
+          <h1 id="gangName" class="text-2xl font-bold text-red-900 editable" contenteditable="true">
+            ผังเครือข่ายแก๊งลักรถจักรยานยนต์ "แก๊งท่อดังซอย 8"
+          </h1>
+          <p id="deptName" class="text-lg text-gray-700 font-bold editable" contenteditable="true">
+            กองกำกับการสืบสวน ตำรวจภูธรจังหวัดตาก
+          </p>
+          <p id="subDeptName" class="text-sm text-gray-500 editable" contenteditable="true">ภ.จว.ตาก (ภ.6)</p>
+        </div>
+      </div>
+
+      <div class="text-right">
+        <div class="inline-block bg-red-600 text-white px-4 py-1 text-sm font-bold rounded mb-1 shadow-sm">ลับ (Confidential)</div>
+        <p id="reportDate" class="text-xs text-red-800 font-bold editable" contenteditable="true">ข้อมูล ณ วันที่: -</p>
+      </div>
+    </div>
+
+    <!-- Content -->
+    <div class="grid grid-cols-12 gap-4 h-full">
+
+      <!-- Left -->
+      <div class="col-span-4 border-r-2 border-dashed border-gray-300 pr-2">
+        <h2 class="text-lg font-bold text-blue-900 mb-2 border-b border-gray-300">
+          <i class="fas fa-users"></i> 1. โครงสร้าง/สมาชิก
+        </h2>
+
+        <!-- Leader -->
+        <div class="flex flex-col items-center mb-6 relative">
+          <div class="absolute -top-3 bg-red-100 text-red-800 text-xs px-2 py-0.5 rounded border border-red-300 font-bold">
+            หัวหน้า/นายทุน
+          </div>
+          <div class="w-24 h-24 bg-gray-200 border-2 border-red-600 rounded-lg flex items-center justify-center img-upload-box mb-1"
+               onclick="triggerUpload(this)">
+            <input type="file" accept="image/*" class="hidden" onchange="previewImage(this)">
+            <i class="fas fa-user-secret text-3xl text-gray-400 pointer-events-none"></i>
+          </div>
+          <div class="text-center w-full group-member" data-role="leader">
+            <div id="leaderName" class="font-bold text-red-900 editable" contenteditable="true">นายสมชาย (บัง)</div>
+            <div id="leaderRole" class="text-xs text-gray-600 editable" contenteditable="true">สั่งการ/รับซื้อ</div>
+            <div id="leaderAddr" class="text-xs text-gray-500 editable" contenteditable="true">ที่อยู่: อ.แม่สอด</div>
+          </div>
+          <div class="h-6 w-0.5 bg-gray-400 my-1"></div>
+        </div>
+
+        <!-- Members -->
+        <div class="grid grid-cols-2 gap-4">
+          <div class="flex flex-col items-center">
+            <div class="w-20 h-20 bg-gray-100 border border-gray-400 rounded-lg flex items-center justify-center img-upload-box mb-1"
+                 onclick="triggerUpload(this)">
+              <input type="file" accept="image/*" class="hidden" onchange="previewImage(this)">
+              <i class="fas fa-user text-2xl text-gray-400 pointer-events-none"></i>
+            </div>
+            <div class="text-center w-full group-member" data-role="member">
+              <div id="m1Name" class="font-bold text-sm editable" contenteditable="true">นาย A (ดำ)</div>
+              <div id="m1Role" class="text-xs text-red-600 editable" contenteditable="true">มือสะเดาะกุญแจ</div>
+            </div>
+          </div>
+
+          <div class="flex flex-col items-center">
+            <div class="w-20 h-20 bg-gray-100 border border-gray-400 rounded-lg flex items-center justify-center img-upload-box mb-1"
+                 onclick="triggerUpload(this)">
+              <input type="file" accept="image/*" class="hidden" onchange="previewImage(this)">
+              <i class="fas fa-user text-2xl text-gray-400 pointer-events-none"></i>
+            </div>
+            <div class="text-center w-full group-member" data-role="member">
+              <div id="m2Name" class="font-bold text-sm editable" contenteditable="true">นาย B (ขาว)</div>
+              <div id="m2Role" class="text-xs text-red-600 editable" contenteditable="true">ดูต้นทาง/ขับรถ</div>
+            </div>
+          </div>
+
+          <div class="flex flex-col items-center">
+            <div class="w-20 h-20 bg-gray-100 border border-gray-400 rounded-lg flex items-center justify-center img-upload-box mb-1"
+                 onclick="triggerUpload(this)">
+              <input type="file" accept="image/*" class="hidden" onchange="previewImage(this)">
+              <i class="fas fa-user text-2xl text-gray-400 pointer-events-none"></i>
+            </div>
+            <div class="text-center w-full group-member" data-role="support">
+              <div id="m3Name" class="font-bold text-sm editable" contenteditable="true">น.ส. C (ส้ม)</div>
+              <div id="m3Role" class="text-xs text-blue-600 editable" contenteditable="true">บัญชีม้า</div>
+            </div>
+          </div>
+
+          <div class="flex flex-col items-center">
+            <div class="w-20 h-20 bg-gray-100 border border-gray-400 rounded-lg flex items-center justify-center img-upload-box mb-1"
+                 onclick="triggerUpload(this)">
+              <input type="file" accept="image/*" class="hidden" onchange="previewImage(this)">
+              <i class="fas fa-user text-2xl text-gray-400 pointer-events-none"></i>
+            </div>
+            <div class="text-center w-full group-member" data-role="support">
+              <div id="m4Name" class="font-bold text-sm editable" contenteditable="true">นาย D (ช่าง)</div>
+              <div id="m4Role" class="text-xs text-blue-600 editable" contenteditable="true">ดัดแปลงสภาพ</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Center -->
+      <div class="col-span-4 px-2 border-r-2 border-dashed border-gray-300">
+        <h2 class="text-lg font-bold text-blue-900 mb-2 border-b border-gray-300">
+          <i class="fas fa-map-marked-alt"></i> 2. สถานที่/จุดรวมพล
+        </h2>
+
+        <div class="relative w-full h-48 bg-blue-50 border-2 border-blue-200 rounded mb-4 overflow-hidden img-upload-box shadow-inner"
+             onclick="triggerUpload(this)" title="คลิกเพื่ออัปโหลดแผนที่">
+          <input type="file" accept="image/*" class="hidden" onchange="previewImage(this)">
+          <div class="absolute inset-0 opacity-20 pointer-events-none"
+               style="background-image: radial-gradient(#3b82f6 1px, transparent 1px); background-size: 10px 10px;"></div>
+          <div class="absolute inset-0 flex items-center justify-center text-gray-300 font-bold select-none pointer-events-none flex-col">
+            <i class="fas fa-map-marked-alt text-3xl mb-1"></i>
+            <span>คลิกวางภาพแผนที่</span>
+          </div>
+        </div>
+
+        <div class="space-y-3">
+          <div class="bg-gray-50 p-2 rounded border border-gray-200">
+            <h3 class="font-bold text-sm text-red-800 mb-1"><i class="fas fa-crosshairs"></i> 4. พื้นที่ก่อเหตุ (Red Zone)</h3>
+            <div id="redZoneInfo" class="text-xs text-gray-700 pl-4 editable whitespace-pre-line" contenteditable="true">
+- หอพักหลัง ม. (ช่วง 02.00-04.00 น.)
+- ตลาดนัดริมน้ำปิง
+- ลานจอดรถงานกาชาด
+            </div>
+          </div>
+
+          <div class="bg-gray-50 p-2 rounded border border-gray-200">
+            <h3 class="font-bold text-sm text-blue-800 mb-1"><i class="fas fa-warehouse"></i> 3. สถานที่มั่วสุม/จุดพักรถ</h3>
+            <div id="baseInfo" class="text-xs text-gray-700 pl-4 editable whitespace-pre-line" contenteditable="true">
+- บ้านเช่าไม่มีเลขที่ ซ.รวมใจ ต.ไม้งาม
+- อู่ซ่อมรถช่างศักดิ์ ทางไปเขื่อนภูมิพล
+- โกดังร้างริมเมย (จุดพักรอข้ามแดน)
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Right -->
+      <div class="col-span-4 pl-2">
+        <h2 class="text-lg font-bold text-blue-900 mb-2 border-b border-gray-300">
+          <i class="fas fa-file-invoice"></i> 5. พฤติการณ์ (M.O.)
+        </h2>
+
+        <div class="mb-4">
+          <div id="moInfo" class="text-xs leading-relaxed editable whitespace-pre-line" contenteditable="true">
+1) ตระเวนดูรถ: ใช้ จยย. ไม่ติดแผ่นป้าย 2 คัน คันละ 2 คน เน้นรถ Honda Wave ที่ไม่ล็อคคอ
+2) ลงมือ: ใช้เหล็กตัว T แทงเบ้ากุญแจ หรือถีบคอรถ ใช้เวลาไม่เกิน 1 นาที
+3) เส้นทางหลบหนี: ใช้เส้นทางรอง (ทางลูกรัง) มุ่งหน้า อ.แม่สอด เพื่อส่งออกช่องทางธรรมชาติ
+          </div>
+        </div>
+
+        <div class="border-t border-gray-300 pt-2 mb-2">
+          <h3 class="font-bold text-sm text-gray-800 mb-1"><i class="fas fa-motorcycle"></i> ยานพาหนะ/ของกลาง</h3>
+          <div class="grid grid-cols-2 gap-2">
+            <div class="h-20 bg-gray-100 border border-gray-300 rounded flex items-center justify-center text-xs text-gray-400 img-upload-box"
+                 onclick="triggerUpload(this)">
+              <input type="file" accept="image/*" class="hidden" onchange="previewImage(this)">
+              ภาพรถคนร้าย
+            </div>
+            <div class="h-20 bg-gray-100 border border-gray-300 rounded flex items-center justify-center text-xs text-gray-400 img-upload-box"
+                 onclick="triggerUpload(this)">
+              <input type="file" accept="image/*" class="hidden" onchange="previewImage(this)">
+              ภาพของกลาง
+            </div>
+          </div>
+        </div>
+
+        <div class="bg-yellow-50 border border-yellow-200 p-2 rounded mt-auto">
+          <h3 class="font-bold text-sm text-yellow-800 mb-1"><i class="fas fa-info-circle"></i> ข้อมูลเพิ่มเติม/จุดสังเกต</h3>
+          <div id="extraInfo" class="text-xs text-gray-700 editable whitespace-pre-line" contenteditable="true">
+- มักรวมตัวกันที่ร้านเกมหน้าปากซอย ก่อนออกก่อเหตุ
+- หัวหน้าแก๊งมีรอยสักรูปแมงป่องที่คอ
+- ใช้บัญชีม้าชื่อ "น.ส.ส้ม" ในการรับเงินจากพ่อค้าฝั่งพม่า
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <div class="mt-4 pt-2 border-t border-gray-400 flex justify-between text-[10px] text-gray-500">
+      <span id="footerBy" class="editable" contenteditable="true">จัดทำโดย: กก.สส.ภ.จว.ตาก</span>
+      <span id="footerTel" class="editable" contenteditable="true">โทร: 055-xxx-xxx (ห้องวิทยุ)</span>
+    </div>
+  </div>
+
+<script>
+  // ===== Toast =====
+  function showToast(message, color="black") {
+    const toast = document.getElementById("toast");
+    toast.textContent = message;
+    toast.className = "show";
+    toast.style.backgroundColor =
+      color === "green" ? "#047857" :
+      color === "red" ? "#b91c1c" :
+      color === "orange" ? "#d97706" : "#111827";
+    setTimeout(() => { toast.className = toast.className.replace("show",""); }, 2800);
+  }
+
+  // ===== Date (Thai) =====
+  function setThaiToday(){
+    const d = new Date();
+    const th = new Intl.DateTimeFormat('th-TH', { dateStyle:'long' }).format(d);
+    document.getElementById('reportDate').innerText = `ข้อมูล ณ วันที่: ${th}`;
+    showToast("ใส่วันที่วันนี้แล้ว", "green");
+  }
+
+  // ===== Image Upload =====
+  function triggerUpload(el){
+    const input = el.querySelector('input[type="file"]');
+    if (input) input.click();
+  }
+
+  function previewImage(input){
+    if (!input.files || !input.files[0]) return;
+    const file = input.files[0];
+
+    // (กันไฟล์ใหญ่มากเกินไป)
+    if (file.size > 3 * 1024 * 1024) { // 3MB
+      showToast("ไฟล์รูปใหญ่เกินไป (เกิน 3MB) กรุณาย่อก่อน", "orange");
+      input.value = "";
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const box = input.parentElement;
+      const dataUrl = e.target.result;
+
+      box.style.backgroundImage = `url(${dataUrl})`;
+      box.dataset.img = dataUrl;
+
+      box.style.backgroundRepeat = 'no-repeat';
+      box.style.backgroundPosition = 'center';
+      box.style.backgroundSize = box.classList.contains('rounded-full') ? 'contain' : 'cover';
+
+      Array.from(box.children).forEach(child => {
+        if (child.tagName !== 'INPUT') child.style.display = 'none';
+      });
+
+      showToast("อัปโหลดรูปเรียบร้อย", "green");
+    };
+    reader.readAsDataURL(file);
+  }
+
+  // ===== Collect / Apply Data =====
+  function collectData(){
+    const ids = [
+      'gangName','deptName','subDeptName','reportDate',
+      'leaderName','leaderRole','leaderAddr',
+      'm1Name','m1Role','m2Name','m2Role','m3Name','m3Role','m4Name','m4Role',
+      'redZoneInfo','baseInfo','moInfo','extraInfo',
+      'footerBy','footerTel'
+    ];
+    const data = {};
+    ids.forEach(id => data[id] = document.getElementById(id)?.innerText ?? "");
+
+    // Images (base64)
+    const images = {};
+    document.querySelectorAll('.img-upload-box').forEach((box, idx) => {
+      if (box.dataset.img) images[`img_${idx}`] = box.dataset.img;
+    });
+    data.__images = images;
+
+    data.__savedAt = new Date().toISOString();
+    return data;
+  }
+
+  function applyData(data){
+    Object.keys(data).forEach(k => {
+      if (k.startsWith("__")) return;
+      const el = document.getElementById(k);
+      if (el) el.innerText = data[k] ?? "";
+    });
+
+    // Restore images
+    if (data.__images){
+      const boxes = document.querySelectorAll('.img-upload-box');
+      Object.entries(data.__images).forEach(([key, dataUrl]) => {
+        const idx = parseInt(key.replace('img_',''), 10);
+        const box = boxes[idx];
+        if (!box) return;
+        box.style.backgroundImage = `url(${dataUrl})`;
+        box.dataset.img = dataUrl;
+        box.style.backgroundRepeat = 'no-repeat';
+        box.style.backgroundPosition = 'center';
+        box.style.backgroundSize = box.classList.contains('rounded-full') ? 'contain' : 'cover';
+        Array.from(box.children).forEach(child => {
+          if (child.tagName !== 'INPUT') child.style.display = 'none';
+        });
+      });
+    }
+  }
+
+  // ===== Save to computer (.json) =====
+  function exportJSON(){
+    const data = collectData();
+    const blob = new Blob([JSON.stringify(data, null, 2)], {type:'application/json'});
+    const url = URL.createObjectURL(blob);
+
+    const safeName = (data.gangName || "case")
+      .replace(/[\\/:*?"<>|]/g,'')
+      .slice(0,60);
+
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${safeName}_data.json`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+    showToast("บันทึกไฟล์ .json ลงคอมแล้ว", "green");
+  }
+
+  // ===== Load from computer (.json) =====
+  function importJSON(input){
+    const file = input.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      try{
+        const data = JSON.parse(reader.result);
+        applyData(data);
+        showToast("โหลดข้อมูลจากไฟล์เรียบร้อย", "green");
+      }catch(e){
+        showToast("ไฟล์ไม่ถูกต้อง/อ่านไม่ได้", "red");
+      }finally{
+        input.value = "";
+      }
+    };
+    reader.readAsText(file);
+  }
+
+  // ===== Export PDF (A4 Landscape) =====
+  function exportPDF(){
+    const element = document.getElementById('canvas');
+
+    const data = collectData();
+    const safeName = (data.gangName || "case")
+      .replace(/[\\/:*?"<>|]/g,'')
+      .slice(0,60);
+
+    showToast("กำลังสร้าง PDF...", "orange");
+
+    const opt = {
+      margin:       [0, 0, 0, 0],
+      filename:     `${safeName}.pdf`,
+      image:        { type: 'jpeg', quality: 0.98 },
+      html2canvas:  { scale: 2, useCORS: true, logging: false, backgroundColor: '#ffffff' },
+      jsPDF:        { unit: 'mm', format: 'a4', orientation: 'landscape' }
+    };
+
+    // ปิดเส้นประ editable ชั่วคราวตอน export
+    const editables = element.querySelectorAll('.editable');
+    editables.forEach(el => el.style.borderBottom = 'none');
+
+    html2pdf().set(opt).from(element).save().then(() => {
+      // คืนค่าเส้นประ
+      editables.forEach(el => el.style.borderBottom = '');
+      showToast("ดาวน์โหลด PDF เรียบร้อย", "green");
+    }).catch(() => {
+      editables.forEach(el => el.style.borderBottom = '');
+      showToast("Export PDF ไม่สำเร็จ", "red");
+    });
+  }
+
+  // Auto set today on first load (optional)
+  setThaiToday();
+</script>
+</body>
+</html>
